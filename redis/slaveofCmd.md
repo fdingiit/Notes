@@ -49,7 +49,8 @@ void replicationCreateMasterClient(int fd)	// set flag
 #### how to know the sync has been finished?
 
 ``` c
-#define REPL_STATE_CONNECT 1 /* Must connect to master */
+#define REPL_STATE_CONNECT 1 /* Must connect to master */   // start
+#define REPL_STATE_CONNECTED 15 /* Connected to master */   // end
 
 struct redisServer {
 	...
@@ -75,24 +76,31 @@ struct redisServer {
 #7  0x000000000042f226 in main (argc=1, argv=0x7fffffffe168) at server.c:4118 
 ```
 
-### cmd backlog
+### set cmd backtrace
 ```
-(gdb) bt
-#0  replicationFeedSlaves (slaves=0x7ffff681c090, dictid=-1, argv=0x7fffffffde30, argc=1) at replication.c:173              
-#1  0x0000000000448b1e in replicationCron () at replication.c:2302                                                        
-#2  0x0000000000427de4 in serverCron (eventLoop=0x7ffff68340a0, id=0, clientData=0x0) at server.c:1274                
-#3  0x0000000000421c0c in processTimeEvents (eventLoop=0x7ffff68340a0) at ae.c:322                                         
-#4  0x0000000000421f52 in aeProcessEvents (eventLoop=0x7ffff68340a0, flags=3) at ae.c:423                             
-#5  0x00000000004220a2 in aeMain (eventLoop=0x7ffff68340a0) at ae.c:455                                                      
-#6  0x000000000042f226 in main (argc=1, argv=0x7fffffffe168) at server.c:4118
+(gdb) bt                                                              
+#0  propagate (cmd=0x748770 <redisCommandTable+80>, dbid=0, argv=0x7ffff6821280, argc=3, flags=3) at server.c:2136    
+#1  0x000000000042a767 in call (c=0x7ffff6914b00, flags=15) at server.c:2315                                          
+#2  0x000000000042b008 in processCommand (c=0x7ffff6914b00) at server.c:2533                                          
+#3  0x000000000043ba33 in processInputBuffer (c=0x7ffff6914b00) at networking.c:1299                                  
+#4  0x000000000043bd24 in readQueryFromClient (el=0x7ffff68340a0, fd=7, privdata=0x7ffff6914b00, mask=1)              
+    at networking.c:1363                                                                                              
+#5  0x0000000000421f41 in aeProcessEvents (eventLoop=0x7ffff68340a0, flags=3) at ae.c:412                            
+#6  0x0000000000422102 in aeMain (eventLoop=0x7ffff68340a0) at ae.c:455                                                
+#7  0x000000000042f27b in main (argc=1, argv=0x7fffffffe2b8) at server.c:4116     
 ```
 
+in `call()`:
 ``` c
-void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) 
+/* Propagate the command into the AOF and replication link */
+    if (flags & CMD_CALL_PROPAGATE &&
+        (c->flags & CLIENT_PREVENT_PROP) != CLIENT_PREVENT_PROP) {
+            ...
+            /* Call propagate() only if at least one of AOF / replication
+            * propagation is needed. */
+            if (propagate_flags != PROPAGATE_NONE)
+                propagate(c->cmd,c->db->id,c->argv,c->argc,propagate_flags);
+            ...
+        }
 ```
-
-
-
-
-
 
